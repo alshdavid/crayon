@@ -56,12 +56,20 @@ fn main() {
 ```
 
 This will work by having two components.
-1. (GUI Engine) A standalone application (binary) written with the platform's native GUI toolkit and in the platform's preferred language 
-  1. This binary exposes an API (probably TCP) to trigger the building of a UI from a client.
 
-2. (Library) A consumer library (Rust) that wraps the API from the GUI engine in an ergonomic library
-  1. The library is not needed for the GUI Engine to work, it's just an ergonomic wrapper 
-  2. The library would spawn the GUI Engine as a child process and communicates with to facilitate building a GUI.
+**Gui Engine**
+
+A standalone application (binary) written with the platform's native GUI toolkit and in the platform's preferred language.
+
+This binary exposes an API (probably TCP & JSON) to trigger the building of a UI from a client.
+
+**Library** 
+
+A consumer library (Rust) that wraps the API from the GUI engine in an ergonomic library.
+
+The library is not needed for the GUI Engine to work, it's just an ergonomic wrapper. You should, in theory, be able to produce a client library in any language that can work with TCP & JSON.
+
+The library would spawn the GUI Engine as a child process and communicates with to facilitate building a GUI.
 
 ```mermaid
 sequenceDiagram
