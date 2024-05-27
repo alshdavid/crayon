@@ -63,9 +63,15 @@ A standalone application (binary) written with the platform's native GUI toolkit
 
 This binary exposes an API (probably TCP & JSON) to trigger the building of a UI from a client.
 
+A GUI Engine would need to be produced for each supporting underlying GUI (Windows via Dotnet, MacOS via Cocao, Linux w Gnome via GTK4/Libatwaita, Linux w KDE via QT).
+
+Each engine implementation would map an API contract back to their respective native APIs. This allows for extensibility, as new engines could be added and existing applications can take advantage of them without changes. 
+
 **Library** 
 
 A consumer library (Rust) that wraps the API from the GUI engine in an ergonomic library.
+
+This library could either embed the Gui Engine or communicate with an external Gui Engine daemon process.
 
 The library is not needed for the GUI Engine to work, it's just an ergonomic wrapper. You should, in theory, be able to produce a client library in any language that can work with TCP & JSON.
 
