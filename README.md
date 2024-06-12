@@ -1,89 +1,255 @@
 # Crayon (TODO)
 
-Cross platform UI Toolkit for making native desktop applications.
+A tool for adding lightweight data-bound templating syntax to web projects at runtime or compile time.
 
-This project aims to build a wrapper on top of platform-native UI toolkits written in their native languages to allow for the creation of desktop applications that look/feel idiomatic to the platform.
+## Basic JavaScript (No Build System)
 
-The Rust client syntax is modeled after web APIs and is intended to be a low-ish level API that "frameworks" can be built on top of - much like is the case with the Web world
+```html
+<html>
+  <head>
+    <title>My App</title>
+  </head>
+  <body>
+    <div id="root">
+      <hello-world />
+    </div>
 
-```rust
-use crayon::Window;
-use crayon::Button;
+    <script type="module">
+      import { html, mount, Component } from 'https://cdn.alshdavid.com/crayon/index.js'
 
-fn main() {
-    let window = Window::new(WindowOptions {
-        ..Default::defaut()
-    });
+      Component.register(HelloWorldComponent, {
+        tag: 'hello-world',
+        template: html`
+          <div>{{ helloWorld }}</div>
+          <button (onclick)="onClick">Click Me!</button>
+        `
+      })
+      class HelloWorldComponent {
+        helloWorld
 
-    let mut button = Button::new();
+        constructor() {
+          this.helloWorld = 'initial value'
+        }
 
-    button.set_inner_text("Click Me");
-    button.styles.background_color.set("black");
-    button.styles.color.set("white");
+        onClick() {
+          this.helloWorld = 'updated value'
+        }
+      }
 
-    button.add_event_listener("click", |_| async {
-        println!("Clicked");
-    });
+      const instance = mount({
+        root: document.querySelector('#root')
+        target: HelloWorldComponent,
+      })
+    </script>
+  </body>
+</html>
+```
 
-   window.body.append_child(button);
-   window.launch();
+# Using External Components
+
+```typescript
+import { Component, html, mount } from 'crayon'
+import { FooComponent } from './foo.js'
+
+Component.register(HelloWorldComponent, {
+  tag: 'hello-world',
+  template: html`
+    <div>Hello World</div>
+    <foo /> <!-- This is FooComponent -->
+  `,
+  components: [FooComponent]
+})
+export class HelloWorldComponent {}
+```
+
+# Using External Components (Lazy)
+
+```typescript
+import { Component, html, mount } from 'crayon'
+
+Component.register(HelloWorldComponent, {
+  tag: 'hello-world',
+  template: html`
+    <div>Hello World</div>
+    <foo /> <!-- This is FooComponent -->
+  `,
+  components: [
+    () => (await import('./foo.js')).FooComponent,
+  ]
+})
+export class HelloWorldComponent {}
+```
+
+## Routing
+
+Using the generalized `crayon-router`
+
+```javascript
+import { Router } from 'crayon-router'
+import crayonRouter from 'crayon-router/crayon'
+import { HomePageComponent } from './pages/home.js'
+import { UserPageComponent } from './pages/user.js'
+import { NotFoundPageComponent } from './pages/not-found.js'
+
+const router = new Router()
+
+app.use(crayonRouter({
+  root: document.querySelector('#root')
+}))
+
+app.path('/', async ctx => {
+  await ctx.mount(HomePageComponent)
+})
+
+app.path('/users/:id', async ctx => {
+  await ctx.mount(UserPageComponent)
+})
+
+app.path('/**', async ctx => {
+  await ctx.mount(NotFoundPageComponent)
+})
+
+await app.load()
+```
+
+## Services / Dependencies
+
+```typescript
+import { Component, html, bootstrap, Provider } from 'crayon'
+
+class UserService {
+  async getUserName(): string {
+    return fetch(`/api/user`).then(response => response.text())
+  }
+}
+
+Component.register(HelloWorldComponent, {
+  tag: 'hello-world',
+  template: html`
+    <div>Hello {{ userName }}</div>
+  `,
+  inject: ['UserService']
+})
+export class HelloWorldComponent {
+  userName: string
+  #userService: UserService
+
+  constructor(
+    userService: UserService
+  ) {
+    this.userService = userService
+    this.userName = ''
+  }
+
+  async onInit() {
+    this.userName = await this.#userService.getUserName()
+  }
+}
+
+const services = new Map()
+services.add('UserService', () => new UserService())
+
+const instance = mount({
+  root: document.querySelector('#root')
+  target: HelloWorldComponent,
+  provide: services,
+})
+```
+
+## Props
+
+```typescript
+import { Component, html, InputBinding, OutputBinding, OutputEmitter } from 'crayon'
+
+Component.register(HelloWorldComponent, {
+  tag: 'hello-world',
+  template: html`
+    <div>{{ foo }}</div>
+    <button (onclick)="bar.emit('clicked')">Click me</button>
+  `,
+  inputBindings: ['foo'],
+  outputBindings: ['bar'],
+  provide: [
+    InputBinding,
+    OutputBinding,
+  ]
+})
+export class HelloWorldComponent {
+  foo: string
+  bar: OutputEmitter<string>
+
+  constructor(
+    inputBinding: InputBinding,
+    outputBinding: OutputBinding,
+  ) {
+    this.foo = inputBinding.init(this, 'foo')
+    this.bar = outputBinding.init(this, 'bar')
+  }
 }
 ```
 
-Elements can be created using macros
+## Reactivity
 
-```rust
-use crayon::Window;
-use crayon::Button;
+Reactivity only occurs on top level component properties and is not deeply evaluated
 
-fn main() {
-    let window = Window::new(WindowOptions {
-        ..Default::defaut()
-    });
+## Internal details, what do templates compile to?
 
-    window.body.append_child(create_element!(
-        <button
-            styles.background_color={"black"}
-            styles.color={"white"}
-            onclick={|_| async { println!("Clicked") }}>
-            Click Me!
-        </button>
-    ));
+Crayon compiles its template syntax into JSX using the `html` tagged template and uses Preact under the hood as a runtime
 
-    window.body.append_child(button);
-    window.launch();
+### Input
+
+```javascript
+Component.register(HelloWorldComponent, {
+  tag: 'hello-world',
+  template: html`
+    <div>{{ helloWorld }}</div>
+    <button (onclick)="onClick">Click Me!</button>
+  `,
+  provide: ['InjectThis']
+})
+class HelloWorldComponent {
+  helloWorld
+
+  constructor(
+    injectThis: string
+  ) {
+    this.helloWorld = injectThis // 'initial value'
+  }
+
+  onClick() {
+    this.helloWorld = 'updated value'
+  }
 }
 ```
 
-This will work by having two components.
+### Output
 
-**Gui Engine**
+```jsx
+import { h, Component } from 'preact'
+import { ProviderContext } from 'crayon'
 
-A standalone application (binary) written with the platform's native GUI toolkit and in the platform's preferred language.
+class HelloWorldComponent extends Component {
+  static contextType = ProviderContext
+  context
 
-This binary exposes an API (probably TCP & JSON) to trigger the building of a UI from a client.
+  constructor(props) {
+    super()
+    this.setState({
+      helloWorld: this.context.get('InjectThis')
+    })
+  }
 
-A GUI Engine would need to be produced for each supporting underlying GUI (Windows via Dotnet, MacOS via SwiftUI, Linux w Gnome via GTK4/Libatwaita, Linux w KDE via QT).
+  onClick() {
+    this.setState({
+      helloWorld: 'updated value'
+    })
+  }
 
-Each engine implementation would map an API contract back to their respective native APIs. This allows for extensibility, as new engines could be added and existing applications can take advantage of them without changes. 
-
-**Library** 
-
-A consumer library (Rust) that wraps the API from the GUI engine in an ergonomic library.
-
-This library could either embed the Gui Engine or communicate with an external Gui Engine daemon process.
-
-The library is not needed for the GUI Engine to work, it's just an ergonomic wrapper. You should, in theory, be able to produce a client library in any language that can work with TCP & JSON.
-
-The library would spawn the GUI Engine as a child process and communicates with to facilitate building a GUI.
-
-```mermaid
-sequenceDiagram
-    Rust ->>+ GUI Engine (e.g. Dotnet): Spawn child process with native UI toolkit 
-    GUI Engine (e.g. Dotnet) -->>+ Rust: TCP
-    Rust -->>+ GUI Engine (e.g. Dotnet): 
-    Rust ->>+ GUI Engine (e.g. Dotnet): Spawn Window
-    Rust ->>+ GUI Engine (e.g. Dotnet): Create Elements
-    Rust ->>+ GUI Engine (e.g. Dotnet): Attach Listeners 
-    GUI Engine (e.g. Dotnet) ->>+ Rust: Dispatch Events
+  render() {
+    return <Fragment>
+      <div>{this.state.helloWorld}</div>
+      <button onClick={() => this.onClick()}>Click Me!</button>
+    </Fragment>
+  }
+}
 ```
